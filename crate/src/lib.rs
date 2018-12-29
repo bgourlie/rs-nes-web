@@ -1,3 +1,5 @@
+#![feature(box_syntax)]
+
 use cfg_if::cfg_if;
 use rs_nes::NesRom;
 use wasm_bindgen::prelude::*;
@@ -28,14 +30,38 @@ cfg_if! {
 pub fn load_rom(bytes: &[u8]) {
     let mut cursor = std::io::Cursor::new(bytes);
     match NesRom::load(&mut cursor) {
-        Ok(_) => web_sys::console::log_1(&"ROM loaded!".to_owned().into()),
-        Err(_) => web_sys::console::log_1(&"Invalid ROM!".to_owned().into()),
+        Ok(rom) => {
+            web_sys::console::log_1(&"ROM loaded!".to_owned().into());
+            match rom.mapper {
+                0 => match rom.prg_rom_banks {
+                    1 => {
+                        let cart = rs_nes::Nrom128::new(&rom).expect("Unable to map ROM to cart");
+                        let cpu = rs_nes::load_cart(cart).expect("Unable to load cart");
+                        //                        run(cpu);
+                    }
+                    2 => {
+                        let cart = rs_nes::Nrom256::new(&rom).expect("Unable to map ROM to cart");
+                        let cpu = rs_nes::load_cart(cart).expect("Unable to load cart");
+                        //                        run(cpu);
+                    }
+                    _ => panic!("Unsupported NROM cart"),
+                },
+                2 => {
+                    let cart = rs_nes::Uxrom::new(&rom).expect("Unable to map ROM to cart");
+                    let cpu = rs_nes::load_cart(cart).expect("Unable to load cart");
+                    //                    run(cpu);
+                }
+                _ => panic!("Mapper {} not supported", rom.mapper),
+            }
+        }
+        Err(msg) => web_sys::console::log_1(&format!("Invalid ROM: {}", msg).into()),
     }
 }
 
 // Called by our JS entry point to run the example.
 #[wasm_bindgen]
 pub fn run() -> Result<(), JsValue> {
+    let size = std::mem::size_of::<rs_nes::Nrom128>();
     set_panic_hook();
     Ok(())
 }
